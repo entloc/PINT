@@ -9,6 +9,7 @@
 ### Datasets
 We conduct our experiments on two well-adopted benchmark datasets — NELL-One and Wiki-One. 
 You can find original datasets them from [here](https://github.com/xwhan/One-shot-Relational-Learning).
+
 You can download datasets used in this paper from [here](https://pan.baidu.com/s/1ENTGLHQLU9W6m4Eb1XOx1A), the extraction code is 36yy.
 
 ### Training
