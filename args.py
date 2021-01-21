@@ -12,7 +12,7 @@ def read_options():
     parser.add_argument("--random_embed", action='store_true')
     parser.add_argument("--lr", default=0.0005, type=float) 
     parser.add_argument("--margin", default=1.0, type=float)
-    parser.add_argument("--max_batches", default=8000, type=int) 
+    parser.add_argument("--max_batches", default=800, type=int) 
     parser.add_argument("--dropout", default=0.2, type=float)
     parser.add_argument("--fine_tune", action='store_true')
     parser.add_argument("--test", action='store_true')
