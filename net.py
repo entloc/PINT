@@ -3,8 +3,6 @@ import torch.nn as nn
 from utils import *
 from torch.autograd import Variable
 
-
-
 class T_GRUA(nn.Module):
 	def __init__(self,  kernel_num, embed_dim, hidden_dim, h_hrt_bg, ent2id, id2ent, id2rel, batch_size, edge_matrix, edge_nums, topk, rel_emb, ent_emb,  device):
 		"""
