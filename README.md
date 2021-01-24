@@ -17,6 +17,6 @@ You can download datasets used in this work from [here](https://pan.baidu.com/s/
 * For Wiki-One: python train.py --dataset "Wiki-One" --embed_dim 50 --hidden_dim 50 --few 1 --eval_every 200 --max_batches 200
 
 ### Test
-* For NELL-One: python train.py --test --dataset "NELL-One" --embed_dim 100 --hidden_dim 100 --few 1 --eval_every 50
-* For Wiki-One: python train.py --test --dataset "Wiki-One" --embed_dim 50 --hidden_dim 50 --few 1 --eval_every 200
+* For NELL-One: python train.py --test --dataset "NELL-One" --embed_dim 100 --hidden_dim 100 --few 1
+* For Wiki-One: python train.py --test --dataset "Wiki-One" --embed_dim 50 --hidden_dim 50 --few 1
 
