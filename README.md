@@ -13,7 +13,7 @@ You can find original datasets them from [here](https://github.com/xwhan/One-sho
 You can download datasets used in this work from [here](https://pan.baidu.com/s/1ENTGLHQLU9W6m4Eb1XOx1A), the extraction code is 36yy.
 
 ### Training
-* For NELL-One: python train.py --dataset "NELL-One" --embed_dim 100 --hidden_dim 100 --few 1 --eval_every 50 --max_batches 300
+* For NELL-One: python train.py --dataset "NELL-One" --embed_dim 100 --hidden_dim 100 --few 1 --eval_every 50 --max_batches 8000
 * For Wiki-One: python train.py --dataset "Wiki-One" --embed_dim 50 --hidden_dim 50 --few 1 --eval_every 200 --max_batches 100
 
 ### Test
