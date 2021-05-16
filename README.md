@@ -1,4 +1,4 @@
-# PINT: A Path-based Interaction Model for Few-Shot Knowledge Graph Reasoning
+# PN-INT: A Path and Neighbor-based Interaction Model for Few-shot Knowledge Graph Completion
 
 ## Start
 
