@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from utils import *
 from torch.autograd import Variable
+import torch.nn.functional as F
 
 class T_GRUA(nn.Module):
 	def __init__(self,  kernel_num, embed_dim, hidden_dim, h_hrt_bg, ent2id, id2ent, id2rel, batch_size, edge_matrix, edge_nums, topk, rel_emb, ent_emb,  device):
@@ -32,7 +33,7 @@ class T_GRUA(nn.Module):
 
 		self.T_GRUS = T_GRUS(self.GRUc, self.embed_dim, self.hidden_dim, self.rel_emb, self.ent_emb, self.device)
 		self.T_GRUQ = T_GRUQ(self.GRUc, self.embed_dim, self.hidden_dim, self.rel_emb, self.edge_matrix, self.topk, self.device)
-		self.loss = nn.MarginRankingLoss(margin=2.0)
+		self.loss = nn.MarginRankingLoss(margin=1.0)
 
 		self.n_bins = 21
 		self.dense = nn.Linear(self.n_bins, 200)
@@ -55,7 +56,7 @@ class T_GRUA(nn.Module):
 		for i in range(len(right_tail_list)):
 			label = torch.where(tree_q==right_tail_list[i],torch.ones(tree_q.size()[0],tree_q.size()[1]).to(self.device),label)
 		index_label = label[0][parent_index[0].long()] # the label of the father of the first layer node
-		 #mask_f
+		#mask_f
 		mask_f[1] = mask_f[1].int()&(~index_label.int())
 		index_label = label[1][parent_index[1].long()] # the label of the father of the second layer node
 		mask_f1 = mask_f[1][parent_index[1].long()]
@@ -72,7 +73,7 @@ class T_GRUA(nn.Module):
 
 		return mask,label
 
-	def count_one(self, t_h, idx, B, tree_all_emb, support_tree_emb, support_tree_emb_list, node, Train=True, parent_all=None, path_all=None):
+	def count_one(self, t_h, t_h_q, idx, B, tree_all_emb, support_tree_emb, support_tree_emb_list, node, Train=True, parent_all=None, path_all=None):
 		index_num = B.tolist()
 		index_num_c = index_num.copy()
 		max_len = max(index_num)
@@ -98,12 +99,17 @@ class T_GRUA(nn.Module):
 		
 		for i in range(len(support_tree_emb_list)):
 			#q-fix, s-fix 
-			similarity = torch.matmul(emb_all, support_tree_emb_list[i].transpose(0,1))
+			similarity = torch.matmul(F.normalize(emb_all,2,-1),  F.normalize(support_tree_emb_list[i],2,-1).transpose(0,1))
+			beta = torch.matmul(support_tree_emb_list[i], self.th(t_h[i]).unsqueeze(-1)).squeeze(-1)
+			alpha = torch.bmm(emb_all, self.th(t_h_q).unsqueeze(-1)).squeeze(-1)
+			alpha = alpha * mask_all
+			#similarity = similarity * alpha.unsqueeze(-1) * beta
+			similarity = similarity * beta #support
+			similarity,_ = similarity.topk(k=1,dim=2)
+			pooling_value = torch.exp((- ((similarity.unsqueeze(-1) - self.mu) ** 2) / (self.sigma ** 2) / 2)).squeeze(2)
+			log_pooling_sum = torch.log(torch.clamp(pooling_value, min=1e-30)) * mask_all.unsqueeze(-1) * 0.01 
+			log_pooling_sum = torch.sum(log_pooling_sum, 1)
 			
-			pooling_value = torch.exp((- ((similarity.unsqueeze(-1) - self.mu) ** 2) / (self.sigma ** 2) / 2))
-			pooling_sum = torch.sum(pooling_value, 2)
-			log_pooling_sum = torch.log(torch.clamp(pooling_sum, min=1e-30)) * mask_all.unsqueeze(-1) * 0.01 
-			log_pooling_sum = torch.sum(log_pooling_sum, 1)/torch.FloatTensor(index_num_c).unsqueeze(-1).to(self.device) 
 			if i==0:
 				log_s = log_pooling_sum.unsqueeze(1)
 			else:
@@ -113,9 +119,11 @@ class T_GRUA(nn.Module):
 				output_all = output
 			else:
 				output_all = torch.cat([output_all, output],dim=-1)
+		#max
 		output_all = torch.sigmoid(output_all)
 		output,_ = torch.max(output_all,dim=-1)
 		output = output.unsqueeze(-1)
+
 
 
 		if Train==True:
@@ -127,7 +135,6 @@ class T_GRUA(nn.Module):
 			return loss
 		else:
 			return output
-
 
 
 
@@ -197,11 +204,13 @@ class T_GRUA(nn.Module):
 					pos_neg_node = [pos_node]+neg_node
 					if len(pos_neg_node)<2:
 						continue
+					#query t-h
+					t_h_q = self.ent_emb(torch.tensor(pos_neg_node).long().to(self.device)) - self.ent_emb(query_head[i].to(self.device))
 					pos_neg_node_tensor = torch.tensor(pos_neg_node).unsqueeze(-1).to(self.device)
 					A = tree_q[i].reshape(-1,1).squeeze(-1)==pos_neg_node_tensor
 					idx = A.nonzero().select(-1,1)
 					B = torch.sum(A,dim=1)
-					loss = loss + self.count_one(t_h, idx, B, tree_all_emb[i], support_tree_emb, support_tree_emb_list, tree_q[i].reshape(-1,1).squeeze(-1),True, parent_all, path_all)
+					loss = loss + self.count_one(t_h, t_h_q, idx, B, tree_all_emb[i], support_tree_emb, support_tree_emb_list, tree_q[i].reshape(-1,1).squeeze(-1),True, parent_all, path_all)
 			return loss
 		
 		else:
@@ -219,14 +228,16 @@ class T_GRUA(nn.Module):
 					filt_name = [self.id2ent[i] for i in filt_node]
 					rel_candidates_name = [self.id2ent[i] for i in rel_candidates]
 
-					if query_tail[i] not in filt_node:
+					if len(filt_node)==0:
 						score_batch_list.append([])
 						node_batch_list.append([])
 						continue
+
+					t_h_q = self.ent_emb(torch.tensor(filt_node).long().to(self.device)) - self.ent_emb(query_head[i].to(self.device))
 					A = tree_q[i].reshape(-1,1).squeeze(-1)==torch.tensor(filt_node).unsqueeze(-1).to(self.device)
 					idx = A.nonzero().select(-1,1)
 					B = torch.sum(A,dim=1)
-					output = self.count_one(t_h, idx, B, tree_all_emb[i], support_tree_emb, support_tree_emb_list, tree_q[i].reshape(-1,1).squeeze(-1), False).squeeze(-1)
+					output = self.count_one(t_h, t_h_q, idx, B, tree_all_emb[i], support_tree_emb, support_tree_emb_list, tree_q[i].reshape(-1,1).squeeze(-1), False).squeeze(-1)
 					sort_score, sort_index = torch.sort(output, descending=True) 
 					node_index = torch.tensor(filt_node)[sort_index.long()].to(self.device)
 					node_name  = [self.id2ent[i] for i in node_index.tolist()]
@@ -248,15 +259,14 @@ class T_GRUA(nn.Module):
 		if n_kernels == 1:
 			return l_mu
 
-		bin_size = 2.0 / (n_kernels - 1)  # score range from [-1, 1]
-		l_mu.append(1 - bin_size / 2)  # mu: middle of the bin
+		bin_size = 1.0 / (n_kernels - 1)
+		l_mu.append(1 - bin_size / 2) 
 		for i in range(1, n_kernels - 1):
 			l_mu.append(l_mu[i] - bin_size)
 		return l_mu
 
 
 	def kernel_sigmas(self, n_kernels):
-		bin_size = 2.0 / (n_kernels - 1)
 		l_sigma = [0.001]
 		if n_kernels == 1:
 			return l_sigma
@@ -413,11 +423,22 @@ class T_GRUS(nn.Module):
 		tail_t = support_pair_t.select(-1,1).to(self.device)
 		t_h = self.ent_emb(tail_t) - self.ent_emb(head_t)
 
-		# path's embedding
+		#path的embedding
 		support_path_filter = []
+		flag = 0
 		for i in range(len(support_path)):
-			if len(support_path[i])!=0:
+			if i==0 and len(support_path[i])!=0:
+				t_h_new = t_h[0].unsqueeze(0)
 				support_path_filter.append(support_path[i])
+				flag = 1
+				
+			if len(support_path[i])!=0 and i!=0:
+				support_path_filter.append(support_path[i])
+				if flag == 1:
+					t_h_new = torch.cat([t_h_new,t_h[i].unsqueeze(0)],dim=0)
+				else:
+					t_h_new = t_h[i].unsqueeze(0)
+					flag = 1
 
 		tail_emb = []
 		rel_pad = self.rel_emb.weight.size()[0]
@@ -467,4 +488,4 @@ class T_GRUS(nn.Module):
 				tail_emb_all = tail_emb[0]
 			else:
 				tail_emb_all = torch.cat([tail_emb_all,tail_emb[i]],dim=0)
-		return tail_emb_all,tail_emb,t_h
+		return tail_emb_all,tail_emb,t_h_new

@@ -6,7 +6,7 @@ def read_options():
     parser.add_argument("--mode",default='test',type=str)
     parser.add_argument("--embed_dim", default=100, type=int)
     parser.add_argument("--hidden_dim", default=100, type=int)
-    parser.add_argument("--few", default=1, type=int)
+    parser.add_argument("--few", default=5, type=int)
     parser.add_argument("--batch_size", default=32, type=int) 
     parser.add_argument("--neg_num", default=3, type=int)
     parser.add_argument("--random_embed", action='store_true')
@@ -24,7 +24,7 @@ def read_options():
     parser.add_argument("--epoch", default=3, type=int)
     parser.add_argument("--hop", default=3, type=int)
     parser.add_argument("--max_neighbor", default=200, type=int)
-    parser.add_argument("--eval_every", default=50, type=int) # NELL-One:50  Wiki-One:200 or 600
+    parser.add_argument("--eval_every", default=50, type=int) # NELL-One:50  Wiki-One:200 or 500
     parser.add_argument("--neighbor_limit",default=300,type=int)
     parser.add_argument("--topk",default=100,type=int)
     parser.add_argument("--kernel_num",default=21,type=int)

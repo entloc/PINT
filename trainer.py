@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import random
-
+import torch.nn as nn
 from collections import defaultdict
 from collections import deque
 from torch import optim
@@ -39,7 +39,7 @@ class Trainer(object):
         self.load_embed()
 
         self.neighbor_matcher = Neighbor_Matcher(self.edge_matrix, self.edge_nums, self.rel_emb, self.ent_emb, self.embed_dim, self.kernel_num, self.device).to(self.device)
-        self.T_GRUA = T_GRUA(self.kernel_num, self.embed_dim, self.hidden_dim, self.h_hrt_bg,self.ent2id, self.id2ent, self.id2rel, self.batch_size,self.edge_matrix,self.edge_nums,self.topk, self.rel_emb, self.ent_emb, self.device).to(self.device)
+        self.T_GRUA =T_GRUA(self.kernel_num, self.embed_dim, self.hidden_dim, self.h_hrt_bg,self.ent2id, self.id2ent, self.id2rel, self.batch_size,self.edge_matrix,self.edge_nums,self.topk, self.rel_emb, self.ent_emb, self.device).to(self.device)
 
         model_params = list(set(list(self.T_GRUA.parameters()) + list(self.neighbor_matcher.parameters())))
 
@@ -237,7 +237,6 @@ class Trainer(object):
             support_pair, query_pair, one_tomany_train, candidates_id = data[0]
             #t-h
             support_left, support_right, query_left, query_right, false_left, false_right = data[1]
-             # print
             support_pair_name = []
             for i in range(len(support_pair)):
                 support_pair_name.append([self.id2ent[support_pair[i][0]], self.id2ent[support_pair[i][1]]])
@@ -273,7 +272,7 @@ class Trainer(object):
 
             with torch.no_grad():
                 #If you think it will take a long time to test, you can set this value higher, but you may miss some better values
-                if batch_num % self.eval_every==0 :  #NELL-ONE:50  WIKI-ONE:200 or 600
+                if batch_num % self.eval_every==0 :  #NELL-ONE:50  WIKI-ONE:200 or 500
                     hit1, hit5, hit10, mrr = self.eval(self.mode)
                     self.writer.add_scalar('hit1', hit1, batch_num)
                     self.writer.add_scalar('hit5', hit5, batch_num)
@@ -285,10 +284,10 @@ class Trainer(object):
                     if hit10 > best_hits10:
                         self.save(self.save_path + '_hits10_best')
                         best_hits10 = hit10
-            if batch_num==self.max_batches:  #8000
+            if batch_num==self.max_batches:  
                 self.save()
                 break
-            #self.test_(self.mode) # test
+
 
 
     def test_(self, mode='test'):
@@ -313,8 +312,12 @@ class Trainer(object):
         return support_pair, query_paireval
 
     # baseline # n-shot
-    def find_sq(self,key): 
-        trip_key = self.rel_test_trip[key]
+    def find_sq(self,key,mode): 
+        if mode=='test':
+            trip_key = self.rel_test_trip[key]
+        else:
+            trip_key = self.rel_dev_trip[key]
+        
         support_pair = []
         query_paireval = []
         for i in range(len(trip_key)):
@@ -352,7 +355,7 @@ class Trainer(object):
             for i in range(len(candidate_ent)):
                 candidate_ent_id.append(self.ent2id[candidate_ent[i]])
 
-            support_pair_eval, query_paireval = self.find_sq(key) 
+            support_pair_eval, query_paireval = self.find_sq(key, mode) 
             support_name = []
             for i in range(len(support_pair_eval)):
                 support_name.append([self.id2ent[support_pair_eval[i][0]],self.id2ent[support_pair_eval[i][1]]])
@@ -432,17 +435,17 @@ class Trainer(object):
                         sub_query_left = [int(head_batch[m])] * len(sub)
                         score = self.neighbor_matcher(support_left, sub_query_left, support_right, sub).tolist()
                         scores += score
-
-                    #add
+                    #'''
+                    #add-path-score
                     if len(score_batch_list)!=0:
                         graph_score_one = score_batch_list[m]
                         graph_node_one = node_batch_list[m]
                         for n in range(len(graph_node_one)):
                             loc = query_right.index(graph_node_one[n])
-                            scores[loc] = scores[loc] + graph_score_one[n]
+                            scores[loc] = max(scores[loc], graph_score_one[n])
+                    #'''
                     scores = np.array(scores)
-                    sort = list(np.argsort(scores))[::-1]
-
+                    sort = list(np.argsort(-scores))
                     top_scores = []
                     for idx in sort[:123]:
                         top_scores.append(scores[idx])
@@ -482,17 +485,17 @@ class Trainer(object):
 
                         score = self.neighbor_matcher(support_left, sub_query_left, support_right, sub).tolist()
                         scores += score
-
-                    #add
+                    #'''
+                    #add-path-score
                     if len(score_batch_list)!=0:
                         graph_score_one = score_batch_list[m]
                         graph_node_one = node_batch_list[m]
                         for n in range(len(graph_node_one)):
                             loc = query_right.index(graph_node_one[n])
-                            scores[loc] = scores[loc] + graph_score_one[n]
-
+                            scores[loc] = max(scores[loc], graph_score_one[n])  
+                    #'''                            
                     scores = np.array(scores)
-                    sort = list(np.argsort(scores))[::-1]
+                    sort = list(np.argsort(-scores))
                     rank = sort.index(0) + 1
 
                     if rank <= 10:

@@ -122,12 +122,15 @@ def train_generate(few, neg_num, dataset_path, batch_size,train_tasks,ent2id,rel
 
 		train_tri_id = [[ent2id[triple[0]],rel2id[triple[1]],ent2id[triple[2]]] for triple in train_and_test]
 
-		support_trip = train_tri_id[:few] 
+		#support_trip = train_tri_id[:few] 
+		support_trip = random.choices(train_tri_id, k=few)
 
 		support_left = [triple[0] for triple in support_trip]
 		support_right = [triple[2] for triple in support_trip]
 
-		query_trip = train_tri_id[few:]
+		#query_trip = train_tri_id[few:]
+		query_trip = [x for x in train_tri_id if x not in support_trip]
+
 		if len(support_trip) == 0 or len(query_trip)==0:
 			continue
 		if len(query_trip) < batch_size:
