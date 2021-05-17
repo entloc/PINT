@@ -1,4 +1,4 @@
-# PN-INT: A Path and Neighbor-based Interaction Model for Few-shot Knowledge Graph Completion
+# PN-INT: A Path and Neighbor Based Interaction Model for Few-shot Knowledge Graph Completion
 
 ## Start
 
